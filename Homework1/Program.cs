@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
+using System.Threading;
 
 namespace Homework1
 {
@@ -15,6 +16,17 @@ namespace Homework1
         static string textFilePath = "";
         static bool processedFile = false;
         static List<string> words = new List<string>();
+
+        static int wordsCount = -1;
+        static List<string> shortestWords = new();
+        static List<string> longestWords = new();
+        static double averageWordLength = -1;
+        static List<string> fiveMostCommonWords = new();
+        static List<string> fiveLeastCommonWords = new();
+
+        static TimeSpan totalTimeElapsedSynchronously = new TimeSpan(0);
+        static TimeSpan totalTimeElapsedInParallel = new TimeSpan(0);
+
 
         // Match words like:
         // text, small, голям, по-голям, най-голям
@@ -49,10 +61,47 @@ namespace Homework1
                 return;
             }
 
+            if (filesToProcess.Count == 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("The provided files were not found.");
+                Console.Write("Press any key to exit...");
+
+                Console.ReadKey();
+                return;
+            }
+
             Console.WriteLine(new String('#', 40));
             Console.WriteLine("Processing files synchronously");
             Console.WriteLine(new String('#', 40));
+            Console.WriteLine();
             ProcessFilesSynchronously();
+
+            foreach (var filePath in args)
+            {
+                filesToProcess.Enqueue(filePath);
+            }
+
+            Console.WriteLine(new String('#', 40));
+            Console.WriteLine("Processing files in parallel");
+            Console.WriteLine(new String('#', 40));
+            Console.WriteLine();
+            ProcessFilesInParallel();
+
+            Console.WriteLine("Processing time results:");
+            Console.WriteLine($"Synchronously: " +
+                $"{totalTimeElapsedSynchronously.Minutes:D2}:" +
+                $"{totalTimeElapsedSynchronously.Seconds:D2}." +
+                $"{totalTimeElapsedSynchronously.Milliseconds:D3}");
+
+            Console.WriteLine($"In parallel: " +
+                $"{totalTimeElapsedInParallel.Minutes:D2}:" +
+                $"{totalTimeElapsedInParallel.Seconds:D2}." +
+                $"{totalTimeElapsedInParallel.Milliseconds:D3}");
+
+            Console.WriteLine();
+            Console.Write("Press any key to exit...");
+            Console.ReadKey();
         }
 
         private static void ProcessFilesSynchronously()
@@ -61,15 +110,18 @@ namespace Homework1
             
             while (filesToProcess.Count > 0)
             {
-                stopwatch.Reset();
-
-                stopwatch.Start();
                 textFilePath = filesToProcess.Dequeue();
 
-                Console.WriteLine($"Processing file {textFilePath} ...");
+                Console.WriteLine($"Loading file {textFilePath} ...");
 
                 words = GetWordsOfTextFromFile();
                 if (!processedFile) continue;
+
+                stopwatch.Reset();
+
+                Console.WriteLine($"Processing file...");
+
+                stopwatch.Start();
 
                 int wordsCount = GetWordsNumber();
                 List<string> shortestWords = GetShortestWords();
@@ -88,13 +140,123 @@ namespace Homework1
                              fiveLeastCommonWords);
 
                 var elapsedTime = stopwatch.Elapsed;
+
+                totalTimeElapsedSynchronously += elapsedTime;
+
                 Console.WriteLine($"Processing took: " +
                     $"{elapsedTime.Minutes:D2}:{elapsedTime.Seconds:D2}.{elapsedTime.Milliseconds:D3}");
                 Console.WriteLine(new String('=', 20));
+                Console.WriteLine();
             }
+        }
 
-            Console.Write("Press any key to exit...");
-            Console.ReadKey();
+        private static void ProcessFilesInParallel()
+        {
+            var stopwatch = new Stopwatch();
+
+            while (filesToProcess.Count > 0)
+            {
+                textFilePath = filesToProcess.Dequeue();
+
+                Console.WriteLine($"Loading file {textFilePath} ...");
+
+                words = GetWordsOfTextFromFile();
+                if (!processedFile) continue;
+
+                var getWordsNumberThread = new Thread(GetWordsNumberInParallel);
+                var getShortestWordsThread = new Thread(GetShortestWordsInParallel);
+                var getLongestWordsThread = new Thread(GetLongestWordsInParallel);
+                var getAverageWordLengthThread = new Thread(GetAverageWordLengthInParallel);
+                var getNMostCommonWordsThread = new Thread(GetNMostCommonWordsInParallel);
+                var getNLeastCommonWordsThread = new Thread(GetNLeastCommonWordsInParallel);
+
+                List<Thread> threads = new List<Thread>
+                {
+                    getWordsNumberThread,
+                    getShortestWordsThread,
+                    getLongestWordsThread,
+                    getAverageWordLengthThread,
+                    getNMostCommonWordsThread,
+                    getNLeastCommonWordsThread
+                };
+
+                stopwatch.Reset();
+
+                Console.WriteLine($"Processing file...");
+
+                stopwatch.Start();
+
+                getWordsNumberThread.Start();
+                getShortestWordsThread.Start();
+                getLongestWordsThread.Start();
+                getAverageWordLengthThread.Start();
+                getNMostCommonWordsThread.Start(5);
+                getNLeastCommonWordsThread.Start(5);
+
+                while (true)
+                {
+                    for (int i = 0; i < threads.Count; i++)
+                    {
+                        if (threads[i].Join(0))
+                        {
+                            threads.RemoveAt(i);
+                            i--;
+                        }
+                    }
+
+                    if (threads.Count == 0) break;
+                }
+
+                stopwatch.Stop();
+
+                PrintResults(wordsCount,
+                             shortestWords,
+                             longestWords,
+                             averageWordLength,
+                             fiveMostCommonWords,
+                             fiveLeastCommonWords);
+
+                var elapsedTime = stopwatch.Elapsed;
+
+                totalTimeElapsedInParallel += elapsedTime;
+
+                Console.WriteLine($"Processing took: " +
+                    $"{elapsedTime.Minutes:D2}:{elapsedTime.Seconds:D2}.{elapsedTime.Milliseconds:D3}");
+                Console.WriteLine(new String('=', 20));
+                Console.WriteLine();
+            }
+        }
+
+        private static void GetNLeastCommonWordsInParallel(object obj)
+        {
+            var n = (int)obj;
+            fiveLeastCommonWords = GetNLeastCommonWords(n);
+        }
+
+        private static void GetNMostCommonWordsInParallel(object obj)
+        {
+            var n = (int)obj;
+            fiveMostCommonWords = GetNMostCommonWords(n);
+        }
+
+        private static void GetAverageWordLengthInParallel()
+        {
+            averageWordLength = GetAverageWordLength();
+        }
+
+        private static void GetLongestWordsInParallel()
+        {
+            longestWords = GetLongestWords();
+        }
+
+        private static void GetShortestWordsInParallel()
+        {
+            shortestWords = GetShortestWords();
+        }
+
+        private static void GetWordsNumberInParallel()
+        {
+            wordsCount = GetWordsNumber();
         }
 
         private static List<string> GetNLeastCommonWords(int n)
@@ -157,7 +319,7 @@ namespace Homework1
         private static List<string> GetLongestWords()
         {
             var result = new List<string>();
-            int maxWordLength = -1;
+            var maxWordLength = -1;
 
             foreach (var word in words)
             {
@@ -181,7 +343,7 @@ namespace Homework1
         private static List<string> GetShortestWords()
         {
             var result = new List<string>();
-            int minWordLength = int.MaxValue;
+            var minWordLength = int.MaxValue;
 
             foreach (var word in words)
             {
@@ -204,13 +366,24 @@ namespace Homework1
 
         private static int GetWordsNumber()
         {
-            return words.Count;
+            // intentionally counting words in this way
+            var count = 0;
+            using var enumerator = words.GetEnumerator();
+
+            while (enumerator.MoveNext())
+            {
+                count++;
+            }
+
+            return count;
         }
 
         private static List<string> GetWordsOfTextFromFile()
         {
             var result = new List<string>();
             var text = "";
+
+            processedFile = false;
 
             try
             {
