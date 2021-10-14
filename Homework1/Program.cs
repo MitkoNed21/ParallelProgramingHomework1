@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 namespace Homework1
 {
@@ -48,8 +49,21 @@ namespace Homework1
                 return;
             }
 
+            Console.WriteLine(new String('#', 40));
+            Console.WriteLine("Processing files synchronously");
+            Console.WriteLine(new String('#', 40));
+            ProcessFilesSynchronously();
+        }
+
+        private static void ProcessFilesSynchronously()
+        {
+            var stopwatch = new Stopwatch();
+            
             while (filesToProcess.Count > 0)
             {
+                stopwatch.Reset();
+
+                stopwatch.Start();
                 textFilePath = filesToProcess.Dequeue();
 
                 Console.WriteLine($"Processing file {textFilePath} ...");
@@ -64,17 +78,23 @@ namespace Homework1
                 List<string> fiveMostCommonWords = GetNMostCommonWords(5);
                 List<string> fiveLeastCommonWords = GetNLeastCommonWords(5);
 
-                Console.WriteLine(new String('=', 20));
-                Console.WriteLine($"File: {textFilePath}");
-                Console.WriteLine(new String('-', 20));
-                Console.WriteLine($"Words: {wordsCount}");
-                Console.WriteLine($"Shortest word(s) ({shortestWords.First().Length} characters): {String.Join(", ", shortestWords)}");
-                Console.WriteLine($"Longest word(s) ({longestWords.First().Length} characters): {String.Join(", ", longestWords)}");
-                Console.WriteLine($"Average word length: {averageWordLength:F5} characters");
-                Console.WriteLine($"Five most common words: {String.Join(", ", fiveMostCommonWords)}");
-                Console.WriteLine($"Five least common words: {String.Join(", ", fiveLeastCommonWords)}");
+                stopwatch.Stop();
+                
+                PrintResults(wordsCount,
+                             shortestWords,
+                             longestWords,
+                             averageWordLength,
+                             fiveMostCommonWords,
+                             fiveLeastCommonWords);
+
+                var elapsedTime = stopwatch.Elapsed;
+                Console.WriteLine($"Processing took: " +
+                    $"{elapsedTime.Minutes:D2}:{elapsedTime.Seconds:D2}.{elapsedTime.Milliseconds:D3}");
                 Console.WriteLine(new String('=', 20));
             }
+
+            Console.Write("Press any key to exit...");
+            Console.ReadKey();
         }
 
         private static List<string> GetNLeastCommonWords(int n)
@@ -212,6 +232,20 @@ namespace Homework1
 
             processedFile = true;
             return result;
+        }
+
+        private static void PrintResults(int wordsCount, List<string> shortestWords, List<string> longestWords, double averageWordLength, List<string> fiveMostCommonWords, List<string> fiveLeastCommonWords)
+        {
+            Console.WriteLine(new String('=', 20));
+            Console.WriteLine($"File: {textFilePath}");
+            Console.WriteLine(new String('-', 20));
+            Console.WriteLine($"Words: {wordsCount}");
+            Console.WriteLine($"Shortest word(s) ({shortestWords.First().Length} characters): {String.Join(", ", shortestWords)}");
+            Console.WriteLine($"Longest word(s) ({longestWords.First().Length} characters): {String.Join(", ", longestWords)}");
+            Console.WriteLine($"Average word length: {averageWordLength:F5} characters");
+            Console.WriteLine($"Five most common words: {String.Join(", ", fiveMostCommonWords)}");
+            Console.WriteLine($"Five least common words: {String.Join(", ", fiveLeastCommonWords)}");
+            Console.WriteLine(new String('=', 20));
         }
     }
 }
